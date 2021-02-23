@@ -1,0 +1,10 @@
+# Cached Python files
+*.pyc
+__pycache__/
+
+# Virtual Environment
+venv/
+
+# OAuth tokens
+google-service-account.json
+discord-oauth2.tok
