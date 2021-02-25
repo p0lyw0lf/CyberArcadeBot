@@ -8,3 +8,6 @@ venv/
 # OAuth tokens
 google-service-account.json
 discord-oauth2.tok
+
+# All Databases
+*.db
