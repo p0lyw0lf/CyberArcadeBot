@@ -60,6 +60,15 @@ def delete_database():
     if os.path.exists(DATABASE_FILE):
         os.remove(DATABASE_FILE)
 
+class Database:
+    """
+    TODO: make this a python-friendly interface for interacting with the
+    sqlite3 database
+    """
+
+    def __init__(self, conn):
+        self.conn = conn
+
 if __name__ == "__main__":
     """
     If we are run directly, recreate the database
