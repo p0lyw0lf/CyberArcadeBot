@@ -40,9 +40,6 @@ class SheetCommands(Commands):
         await ctx.channel.trigger_typing()
         await ctx.send(self.get_balance(user))
 
-    async def default_error(self, ctx, error):
-        await ctx.send(f"Oopsie Woopsie: {error}")
-
     async def balance_error(self, ctx, error):
         if isinstance(error, commands.BadArgument):
             await ctx.send("I couldn't find that member, sorry :(")
