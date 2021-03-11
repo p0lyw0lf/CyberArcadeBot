@@ -21,3 +21,4 @@ def setup(bot):
     d = DatabaseCommands(db)
     s = SheetCommands(db)
     s.setup(bot)
+    d.setup(bot)

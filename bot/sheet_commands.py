@@ -20,17 +20,9 @@ class SheetCommands(Commands):
         self.database = database
 
     def setup(self, bot):
-        balance_command = commands.Command(self.balance)
-        balance_command.error(self.balance_error)
-        bot.add_command(balance_command)
-
-        import_command = commands.Command(self.import_sheet, name="import")
-        import_command.error(self.default_error)
-        bot.add_command(import_command)
-
-        export_command = commands.Command(self.export_sheet, name="export")
-        export_command.error(self.default_error)
-        bot.add_command(export_command)
+        self.command(bot, self.balance, self.balance_error)
+        self.command(bot, self.import_sheet, name="import")
+        self.command(bot, self.export_sheet, name="export")
 
     async def balance(self, ctx, *, user: discord.Member = None):
         """Check the current coin balance for yourself or another user"""
