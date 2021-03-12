@@ -145,4 +145,4 @@ class DatabaseCommands(Commands):
         if already_registered:
             await ctx.send(f"User {ctx.author} already registered!")
         else:
-            await ctx.send(f"User {user} successfully registered!")
+            await ctx.send(f"User {ctx.author} successfully registered!")
