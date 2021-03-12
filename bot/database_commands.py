@@ -33,10 +33,14 @@ class DatabaseCommands(Commands):
         self.command(item_group, self.unregister_item, name="unregister")
         self.command(item_group, self.item_details, name="details")
 
+        user_group = self.group(bot, self.user_group_entry, name="user")
+        self.command(user_group, self.register_user_admin, name="register")
+        self.command(bot, self.register_user_self, name="register")
+
     def make_item_list_embed(self, items: List[ItemDefinition]) -> discord.Embed:
         embed = discord.Embed(title="Item List", type="rich")
         for item in items:
-            embed.add_field(name=item.title, value=item.cost)
+            embed.add_field(name=item.title, value=f"{item.cost} coins")
 
         return embed
 
@@ -104,8 +108,41 @@ class DatabaseCommands(Commands):
             title=item.title,
             description=item.desc
         )
-        embed.add_field(name="Cost", value=str(item.cost))
+        embed.add_field(name="Cost", value=f"{item.cost} coins")
         embed.set_image(url=item.image_url)
 
         await ctx.send(embed=embed)
 
+    async def user_group_entry(self, ctx):
+        """
+        Get information about yourself or other users
+        """
+        if ctx.invoked_subcommand is None:
+            await ctx.channel.trigger_typing()
+            balance = self.database.get_balance_discord(ctx.author.id)
+            await ctx.send(f"Your fake balance is **{balance} coins**!")
+
+    @admin_check()
+    async def register_user_admin(self, ctx, user: discord.User):
+        """
+        (ADMIN ONLY) Register another user in the coin system
+        """
+        await ctx.channel.trigger_typing()
+
+        _, already_registered = self.database.register_user(user.id)
+        if already_registered:
+            await ctx.send(f"User {user} already registered!")
+        else:
+            await ctx.send(f"User {user} successfully registered!")
+
+    async def register_user_self(self, ctx):
+        """
+        Register yourself for the coin system
+        """
+        await ctx.channel.trigger_typing()
+
+        _, already_registered = self.database.register_user(ctx.author.id)
+        if already_registered:
+            await ctx.send(f"User {ctx.author} already registered!")
+        else:
+            await ctx.send(f"User {user} successfully registered!")

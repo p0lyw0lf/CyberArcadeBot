@@ -35,7 +35,6 @@ def create_database(conn: sqlite3.Connection):
             message_id TEXT,
             user_id INT NOT NULL,
             date_entered TEXT NOT NULL,
-            mod_approved BOOL NOT NULL,
             coins INT NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
@@ -44,7 +43,8 @@ def create_database(conn: sqlite3.Connection):
             id INTEGER PRIMARY KEY,
             title TEXT NOT NULL,
             -- Create an uppercase title column for quicker searching
-            title_upper TEXT NOT NULL GENERATED ALWAYS AS (UPPER(title)) STORED,
+            -- Ubuntu sqlite3 doesn't have generated columns yet :(
+            title_upper TEXT NOT NULL, -- GENERATED ALWAYS AS (UPPER(title)) STORED,
             desc TEXT NOT NULL,
             image_url TEXT NOT NULL,
             cost INT NOT NULL
@@ -105,6 +105,12 @@ class Database:
     def __init__(self, conn):
         self.conn = conn
 
+        # Initialize proxy functions
+        self.give_item_discord = self._discordify(self.give_item)
+        self.give_coins_discord = self._discordify(self.give_coins)
+        self.buy_item_discord = self._discordify(self.buy_item)
+        self.use_item_discord = self._discordify(self.use_item)
+
     def _select_user_unchecked(self, sql_statement: str, user_tid: int) -> Optional[int]:
         """
         Utility function to execute an SQL SELECT statement based on
@@ -145,11 +151,25 @@ class Database:
             log.warn(f"User {discord_id} present multiple times in table! Affected rows: {matches}")
             return matches[0]
 
+    def _discordify(self, function) -> bool:
+        """
+        Make a Discord ID version of any function that takes a `user_tid` as
+        its first parameter and returns a boolean indicating success. As it
+        turns out, there are a lot of functions in this class that do this.
+        """
+        def inner(self, discord_id: int, *args, **kwargs) -> bool:
+            if (user_tid := self.get_user_tid(discord_id)) is None:
+                return False
+
+            return function(user_tid, *args, **kwargs)
+
+        return inner
+
     def get_user_tid(self, discord_id: int) -> Optional[int]:
         """
         Returns the database id associated with a discord user's id
         """
-        if row := self._select_user_checked('SELECT id FROM users WHERE user_id=?', discord_id) is not None:
+        if (row := self._select_user_checked('SELECT id FROM users WHERE user_id=?', discord_id)) is not None:
             return row[0]
         else:
             return None
@@ -158,7 +178,7 @@ class Database:
         """
         Returns the associated discord user id given a database user id
         """
-        if row := self._select_user_unchecked('SELECT user_id FROM users WHERE id=?', user_tid) is not None:
+        if (row := self._select_user_unchecked('SELECT user_id FROM users WHERE id=?', user_tid)) is not None:
             return int(row[0])
         else:
             return None
@@ -167,7 +187,7 @@ class Database:
         """
         Returns the discord user's coin balance
         """
-        if row := self._select_user_checked('SELECT coins FROM users WHERE user_id=?', discord_id) is not None:
+        if (row := self._select_user_checked('SELECT coins FROM users WHERE user_id=?', discord_id)) is not None:
             return row[0]
         else:
             return None
@@ -176,7 +196,7 @@ class Database:
         """
         Returns the database user's coin balance
         """
-        if row := self._select_user_unchecked('SELECT coins FROM users WHERE id=?', user_tid) is not None:
+        if (row := self._select_user_unchecked('SELECT coins FROM users WHERE id=?', user_tid)) is not None:
             return row[0]
         else:
             return None
@@ -186,7 +206,7 @@ class Database:
         Returns a list of all the user's coin bank transactions. This is
         always the empty list if the user is not registered.
         """
-        if user_id := self.get_user_tid(discord_id) is None:
+        if (user_id := self.get_user_tid(discord_id)) is None:
             log.debug(f"Attempted to get coin gains for unregistered user {discord_id}")
             return []
 
@@ -214,7 +234,7 @@ class Database:
         Returns a list of all items a user has in their backpack. This is
         always the empty list if the user is not registered.
         """
-        if user_id := self.get_user_tid(discord_id) is None:
+        if (user_id := self.get_user_tid(discord_id)) is None:
             log.debug(f"Attempted to get items for unregistered user {discord_id}")
             return []
 
@@ -235,9 +255,9 @@ class Database:
         not the user was already registered.
         """
 
-        if user_id := self.get_user_tid(discord_id) is not None:
+        if (user_tid := self.get_user_tid(discord_id)) is not None:
             log.debug(f"Attempted to register user {discord_id}, but they were already present!")
-            return user_id, True
+            return user_tid, True
 
         c = self.conn.cursor()
         c.execute('INSERT INTO users (user_id, coins) VALUES (?, ?)', [str(discord_id), 0])
@@ -267,7 +287,7 @@ class Database:
         `item_backpack` table.
         """
         c = self.conn.cursor()
-        if old_bpi := self.user_has_item(bpi.user_tid, bpi.item_tid) is not None:
+        if (old_bpi := self.user_has_item(bpi.user_tid, bpi.item_tid)) is not None:
             # Item already exists, do an update
             c.execute('''UPDATE item_backpack
                          SET count=?
@@ -309,13 +329,13 @@ class Database:
         successfully. A return value of `False` means that an item with the
         same title was already present.
         """
-        if existing_item := self.find_item(title) is not None:
+        if (existing_item := self.find_item(title)) is not None:
             return False
 
         c = self.conn.cursor()
-        c.execute('''INSERT INTO item_definitions (title, desc, image_url, cost)
-                     VALUES (?, ?, ?, ?)''',
-                     [title, desc, image_url, cost])
+        c.execute('''INSERT INTO item_definitions (title, title_upper, desc, image_url, cost)
+                     VALUES (?, ?, ?, ?, ?)''',
+                     [title, title.upper(), desc, image_url, cost])
         self.conn.commit()
         c.close()
 
@@ -332,7 +352,76 @@ class Database:
         self.conn.commit()
         c.close()
 
-    # TODO: buying items, logging messages for coin gains
+    def give_coins(self, user_tid: int, message_id: int, message_date: datetime.datetime, num_coins: int) -> bool:
+        """
+        Updates the balance of the specified user to include more or less
+        coins. Does not do bounds checking on the amount of coins. Also assumes
+        that `user_tid` is a valid table user id.
+        """
+        c = self.conn.cursor()
+        c.execute('''INSERT INTO coin_gains (message_id, user_id, date_entered [datetime], mod_approved, coins)
+                     VALUES (?, ?, ?, FALSE, ?)''',
+                     [str(message_id), user_tid, message_date, num_coins])
+        c.execute('''UPDATE users
+                     SET coins=?
+                     WHERE id=?''', [balance + num_coins, user_tid])
+        self.conn.commit()
+        c.close()
+
+        return True
+
+    def give_item(self, user_tid: int, item_tid: int) -> bool:
+        """
+        Unconditionally gives a user the specified item. Assumes that both
+        user_tid and item_tid are valid table ids.
+        """
+        if (bpi := self.user_has_item(user_tid, item.tid)) is None:
+            bpi = BackpackItem(item.tid, user_tid, 1)
+        else:
+            bpi.count += 1
+
+        self.update_backpack_item(bpi)
+
+        return True
+
+    def buy_item(self, user_tid: int, message_id: int, message_date: datetime.datetime, item: ItemDefinition) -> bool:
+        """
+        Notes that a user attempted to buy an item. This can fail (return False)
+        if the user is not registered or doesn't have enough coins. If the item
+        is successfully bought, return True.
+
+        The ItemDefinition to buy must be acquired by find_item or through
+        the get_item_definitions function calls, not constructed manually
+        (bad idea).
+        """
+        balance = self.get_balance(user_tid)
+        if balance is None or balance < item.cost:
+            return False
+
+        self.give_coins(user_tid, message_id, message_date, -item.cost)
+        self.give_item(user_tid, item.tid)
+
+        return True
+
+    def use_item(self, user_tid: int, item_tid: int) -> bool:
+        """
+        Record a user's usage of an item. Assumes user_tid and item_tid are
+        valid. Returns False when the user doesn't have the item or doesn't
+        have enough of that item.
+
+        Really, there should be a Lock here so that we don't have races for
+        using an item multiple times when there's only one, but as long as we
+        aren't multithreaded we should be fine (thank goodness for Asyncio!).
+        """
+        if (bpi := self.user_has_item(user_tid, item_tid)) is None:
+            return False
+
+        if bpi.count <= 0:
+            return False
+        else:
+            bpi.count -= 1
+            self.update_backpack_item(bpi)
+            return True
 
 if __name__ == "__main__":
     """
