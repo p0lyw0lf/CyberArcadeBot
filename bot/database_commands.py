@@ -6,7 +6,7 @@ import re
 from typing import List
 
 from .command_registry import Commands
-from .database import Database, ItemDefinition
+from .database import Database, ItemDefinition, BackpackItem
 from .permissions import admin_check
 
 URL_REGEX = re.compile(
@@ -29,18 +29,40 @@ class DatabaseCommands(Commands):
     def setup(self, bot):
         item_group = self.group(bot, self.item_group_entry, name="items")
         self.command(item_group, self.list_items, name="list")
+        self.command(bot, self.list_items, name="list")
         self.command(item_group, self.register_item, name="register")
         self.command(item_group, self.unregister_item, name="unregister")
         self.command(item_group, self.item_details, name="details")
+        self.command(bot, self.item_details, name="details")
 
         user_group = self.group(bot, self.user_group_entry, name="user")
         self.command(user_group, self.register_user_admin, name="register")
-        self.command(bot, self.register_user_self, name="register")
+        self.command(user_group, self.get_user_backpack, name="backpack")
+        self.command(bot, self.get_user_backpack, name="backpack")
+
+        self.command(bot, self.buy_item, name="buy")
+        self.command(bot, self.give_coins, name="givecoin")
 
     def make_item_list_embed(self, items: List[ItemDefinition]) -> discord.Embed:
         embed = discord.Embed(title="Item List", type="rich")
         for item in items:
             embed.add_field(name=item.title, value=f"{item.cost} coins")
+
+        return embed
+
+    def make_backpack_embed(self, items: List[BackpackItem]) -> discord.Embed:
+        embed = discord.Embed(title="Backpack", type="rich")
+
+        item_data = []
+        for bpi in items:
+            item = self.database.backpack_item_to_definition(bpi)
+            if item is not None:
+                item_data.append((item.title, bpi.count))
+
+        item_data.sort(key=lambda t: t[1], reverse=True)
+
+        for title, count in item_data:
+            embed.add_field(name=title, value=f"x{count}")
 
         return embed
 
@@ -146,3 +168,47 @@ class DatabaseCommands(Commands):
             await ctx.send(f"User {ctx.author} already registered!")
         else:
             await ctx.send(f"User {ctx.author} successfully registered!")
+
+    async def buy_item(self, ctx, item: str):
+        """
+        Buy an item from the store
+        """
+        await ctx.channel.trigger_typing()
+
+        if (item_def := self.database.find_item(item)) is None:
+            await ctx.send(f"Item \"{item}\" doesn't exist!")
+            return
+
+        if self.database.buy_item_discord(
+            ctx.author.id,
+            ctx.message.id, ctx.message.created_at,
+            item_def):
+            await ctx.send(f"Cha-ching! You bought **{item}**! No refunds!")
+        else:
+            await ctx.send("You don't have enough coins :(")
+
+    @admin_check()
+    async def give_coins(self, ctx, user: discord.User, coins: int):
+        """
+        (ADMIN ONLY): Users can have a little coin, as a treat
+        """
+        await ctx.channel.trigger_typing()
+
+        if self.database.give_coins_discord(
+            user.id,
+            ctx.message.id, ctx.message.created_at,
+            coins):
+            await ctx.send(f"Gave {user} **{coins} coins**!")
+        else:
+            await ctx.send(f"Error giving {user} coins; are they registered?")
+
+    async def get_user_backpack(self, ctx, *, user: discord.User = None):
+        """
+        List the items in your or another user's backpack
+        """
+        await ctx.channel.trigger_typing()
+
+        if user is None: user = ctx.author
+
+        items = self.database.get_backpack_items(user.id)
+        await ctx.send(embed=self.make_backpack_embed(items))

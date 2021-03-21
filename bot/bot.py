@@ -10,14 +10,17 @@ from .database import Database, DATABASE_FILE
 
 description = '''See your Cyber Arcade Coin balance!'''
 intents = discord.Intents.default()
-bot = commands.Bot(command_prefix="ca!", description=description, intents=intents)
+bot = commands.Bot(
+    command_prefix=("ca!", "Ca!", "CA!", "ca ", "Ca ", "CA"),
+    description=description,
+    intents=intents)
 
 @bot.event
 async def on_ready():
     log.info(f"Logged in as {bot.user}")
 
 def setup(bot):
-    db = Database(sqlite3.connect(DATABASE_FILE, detect_types=sqlite3.PARSE_COLNAMES))
+    db = Database(sqlite3.connect(DATABASE_FILE, detect_types=sqlite3.PARSE_COLNAMES | sqlite3.PARSE_DECLTYPES))
     d = DatabaseCommands(db)
     s = SheetCommands(db)
     s.setup(bot)

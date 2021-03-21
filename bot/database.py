@@ -157,7 +157,7 @@ class Database:
         its first parameter and returns a boolean indicating success. As it
         turns out, there are a lot of functions in this class that do this.
         """
-        def inner(self, discord_id: int, *args, **kwargs) -> bool:
+        def inner(discord_id: int, *args, **kwargs) -> bool:
             if (user_tid := self.get_user_tid(discord_id)) is None:
                 return False
 
@@ -245,6 +245,23 @@ class Database:
         rows = c.fetchall()
 
         return [BackpackItem(*row) for row in rows]
+
+    def backpack_item_to_definition(self, bpi: BackpackItem) -> Optional[BackpackItem]:
+        """
+        Looks up the item id of the backpack item in the item definition table
+        """
+
+        c = self.conn.cursor()
+        c.execute('''SELECT id, title, desc, image_url, cost
+                     FROM item_definitions
+                     WHERE id=?''', [bpi.item_tid])
+        rows = c.fetchall()
+
+        if len(rows) == 0:
+            log.debug(f"Item definition for {bpi.item_tid=} not found")
+            return None
+        else:
+            return ItemDefinition(*(rows[0]))
 
     def register_user(self, discord_id: int) -> Tuple[int, bool]:
         """
@@ -358,8 +375,13 @@ class Database:
         coins. Does not do bounds checking on the amount of coins. Also assumes
         that `user_tid` is a valid table user id.
         """
+
+        balance = self.get_balance(user_tid)
+        if balance is None or balance + num_coins < min(balance, 0):
+            return False
+
         c = self.conn.cursor()
-        c.execute('''INSERT INTO coin_gains (message_id, user_id, date_entered [datetime], mod_approved, coins)
+        c.execute('''INSERT INTO coin_gains (message_id, user_id, date_entered, mod_approved, coins)
                      VALUES (?, ?, ?, FALSE, ?)''',
                      [str(message_id), user_tid, message_date, num_coins])
         c.execute('''UPDATE users
@@ -375,8 +397,8 @@ class Database:
         Unconditionally gives a user the specified item. Assumes that both
         user_tid and item_tid are valid table ids.
         """
-        if (bpi := self.user_has_item(user_tid, item.tid)) is None:
-            bpi = BackpackItem(item.tid, user_tid, 1)
+        if (bpi := self.user_has_item(user_tid, item_tid)) is None:
+            bpi = BackpackItem(item_tid, user_tid, 1)
         else:
             bpi.count += 1
 
@@ -394,12 +416,11 @@ class Database:
         the get_item_definitions function calls, not constructed manually
         (bad idea).
         """
-        balance = self.get_balance(user_tid)
-        if balance is None or balance < item.cost:
+        if not self.give_coins(user_tid, message_id, message_date, -item.cost):
             return False
 
-        self.give_coins(user_tid, message_id, message_date, -item.cost)
-        self.give_item(user_tid, item.tid)
+        if not self.give_item(user_tid, item.tid):
+            return False
 
         return True
 
