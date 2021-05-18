@@ -14,25 +14,38 @@ class Commands:
         """
         pass
 
-    def command(self, bot, function, error_handler=None, **kwargs):
+    def command(self, bot_or_group, function, error_handler=None, **kwargs):
+        """
+        Adds a command to the specified bot or group. Uses
+        `discord.ext.commands.Command` to wrap the `function` handler, all extra
+        `**kwargs` are passed through. If no error handler is specified, the
+        default one is attached.
+        """
         command_obj = commands.Command(function, **kwargs)
 
         if error_handler is None:
             error_handler = self.default_error
 
         command_obj.error(error_handler)
-        bot.add_command(command_obj)
+        bot_or_group.add_command(command_obj)
 
         return command_obj
 
-    def group(self, bot, group_function, error_handler=None, **kwargs):
+    def group(self, bot_or_group, group_function, error_handler=None, **kwargs):
+        """
+        Adds a command group to the specified bot or group. Uses
+        `discord.ext.commands.Group` to wrap the `group_function` default group
+        handler. Commands can be added to the returned group using
+        `self.command`. Like before, if no error handler is specified, the
+        default one is used.
+        """
         group = commands.Group(group_function, **kwargs)
 
         if error_handler is None:
             error_handler = self.default_error
 
         group.error(error_handler)
-        bot.add_command(group)
+        bot_or_group.add_command(group)
 
         return group
 

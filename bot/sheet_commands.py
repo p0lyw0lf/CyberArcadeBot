@@ -3,7 +3,7 @@ from discord.ext import commands
 import logging
 log = logging.getLogger(__name__)
 
-from .command_registry import Commands
+from .commands import Commands
 from .database import Database
 from .permissions import admin_check
 from .sheet.google_auth import GoogleAPI

@@ -5,7 +5,7 @@ log = logging.getLogger(__name__)
 import re
 from typing import List
 
-from .command_registry import Commands
+from .commands import Commands
 from .database import Database, ItemDefinition, BackpackItem
 from .permissions import admin_check
 

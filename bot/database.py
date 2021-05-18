@@ -77,7 +77,6 @@ class CoinGain:
     message_id: Optional[int]
     user_id: int
     date_entered: datetime.datetime
-    mod_approved: bool
     coins: int
 
 @dataclass
@@ -381,8 +380,8 @@ class Database:
             return False
 
         c = self.conn.cursor()
-        c.execute('''INSERT INTO coin_gains (message_id, user_id, date_entered, mod_approved, coins)
-                     VALUES (?, ?, ?, FALSE, ?)''',
+        c.execute('''INSERT INTO coin_gains (message_id, user_id, date_entered, coins)
+                     VALUES (?, ?, ?, ?)''',
                      [str(message_id), user_tid, message_date, num_coins])
         c.execute('''UPDATE users
                      SET coins=?
