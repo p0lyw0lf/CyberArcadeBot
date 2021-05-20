@@ -69,13 +69,19 @@ class Reactions(Commands):
     async def on_raw_reaction_add(self, rrae):
         emoji_id = self.partial_emoji_to_key(rrae.emoji)
         message, user, channel, guild = await self.rrae_to_objects(rrae)
-        for add_fn, _ in self.handler_map[emoji_id]:
-            if add_fn is not None:
-                await add_fn(message, user, channel, guild)
+        if message is None:
+            log.error(f"Message {rrae.message_id} not found!")
+        else:
+            for add_fn, _ in self.handler_map[emoji_id]:
+                if add_fn is not None:
+                    await add_fn(message, user, channel, guild)
 
     async def on_raw_reaction_remove(self, rrae):
         emoji_id = self.partial_emoji_to_key(rrae.emoji)
         message, user, channel, guild = await self.rrae_to_objects(rrae)
-        for _, remove_fn in self.handler_map[emoji_id]:
-            if add_fn is not None:
-                await remove_fn(message, user, channel, guild)
+        if message is None:
+            log.error(f"Message {rrae.message_id} not found!")
+        else:
+            for _, remove_fn in self.handler_map[emoji_id]:
+                if remove_fn is not None:
+                    await remove_fn(message, user, channel, guild)

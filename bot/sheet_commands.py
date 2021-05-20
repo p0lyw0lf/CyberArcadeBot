@@ -5,8 +5,8 @@ log = logging.getLogger(__name__)
 
 from .commands import Commands
 from .database import Database
-from .permissions import admin_check
-from .sheet.google_auth import GoogleAPI
+from .permissions import check_user, is_admin
+from .sheet.google_auth import GoogleSheet
 
 class SheetCommands(Commands):
     """
@@ -14,9 +14,8 @@ class SheetCommands(Commands):
     visualization
     """
 
-    def __init__(self, database: Database):
-        self.google_api = GoogleAPI()
-        self.sheet = self.google_api.make_sheet()
+    def __init__(self, sheet: GoogleSheet, database: Database):
+        self.sheet = sheet
         self.database = database
 
     def setup(self, bot):
@@ -56,10 +55,12 @@ class SheetCommands(Commands):
         else:
             return f"{user.display_name} has **{balance}** coins!"
 
+    @check_user(is_admin)
     async def import_sheet(self, ctx):
         """INCOMPLETE: Imports data from the Google Sheet into the bot's database"""
         await ctx.send("I didn't do anything!")
 
+    @check_user(is_admin)
     async def export_sheet(self, ctx):
         """INCOMPLETE: Exports data from the bot's database into the Google Sheet"""
         await ctx.send("I didn't do anything!")

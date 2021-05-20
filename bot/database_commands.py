@@ -7,7 +7,7 @@ from typing import List
 
 from .commands import Commands
 from .database import Database, ItemDefinition, BackpackItem
-from .permissions import admin_check
+from .permissions import check_user, is_admin
 
 URL_REGEX = re.compile(
 r'^(?:http|ftp)s?://' # http:// or https://
@@ -85,7 +85,7 @@ class DatabaseCommands(Commands):
         else:
             await ctx.send(embed=self.make_item_list_embed(items))
 
-    @admin_check()
+    @check_user(is_admin)
     async def register_item(self, ctx, title: str, desc: str, image_url: str, cost: int):
         """
         (ADMIN ONLY) Add a new item to the store
@@ -106,7 +106,7 @@ class DatabaseCommands(Commands):
         else:
             await ctx.send(f"Item \"{title}\" already registered.")
 
-    @admin_check()
+    @check_user(is_admin)
     async def unregister_item(self, ctx, title: str):
         """
         (ADMIN ONLY) Remove an item from the store
@@ -144,7 +144,7 @@ class DatabaseCommands(Commands):
             balance = self.database.get_balance_discord(ctx.author.id)
             await ctx.send(f"Your fake balance is **{balance} coins**!")
 
-    @admin_check()
+    @check_user(is_admin)
     async def register_user_admin(self, ctx, user: discord.User):
         """
         (ADMIN ONLY) Register another user in the coin system
@@ -187,7 +187,7 @@ class DatabaseCommands(Commands):
         else:
             await ctx.send("You don't have enough coins :(")
 
-    @admin_check()
+    @check_user(is_admin)
     async def give_coins(self, ctx, user: discord.User, coins: int):
         """
         (ADMIN ONLY): Users can have a little coin, as a treat

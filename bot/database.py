@@ -217,6 +217,26 @@ class Database:
 
         return [CoinGain(*row) for row in rows]
 
+    def get_coin_gain_from_message(self, message_id: int) -> Optional[CoinGain]:
+        """
+        Returns the CoinGain corresponding to a recorded message, or None if it
+        doesn't exist
+        """
+
+        c = self.conn.cursor()
+        c.execute('''SELECT id, message_id, user_id, date_entered, coins
+                     FROM coin_gains
+                     WHERE message_id=?''', [message_id])
+        rows = c.fetchall()
+
+        if len(rows) == 0:
+            return None
+        else:
+            if len(rows) > 1:
+                # Unexpected condition
+                log.warn(f"Message {message_id} recorded multiple times as a coin gain!")
+            return CoinGain(*row[0])
+
     def get_item_definitions(self) -> Optional[List[ItemDefinition]]:
         """
         Returns a list of all registered items
@@ -386,6 +406,48 @@ class Database:
         c.execute('''UPDATE users
                      SET coins=?
                      WHERE id=?''', [balance + num_coins, user_tid])
+        self.conn.commit()
+        c.close()
+
+        return True
+
+    def update_coin_gain(self, coin_gain_tid: int, new_coins: int) -> bool:
+        """
+        Updates a specified coin gain to reflect a new number of coins. Also
+        updates the user's main balance based on this change. Possible for a
+        user to have negative coins after this, although unlikely.
+
+        Returns True iff the update succeeded
+        """
+
+        c = self.conn.cursor()
+        c.execute('''SELECT id, message_id, user_id, date_entered, coins
+                     FROM coin_gains
+                     WHERE id=?''', [coin_gain_tid])
+        rows = c.fetchall()
+
+        if len(rows) == 0:
+            return False # No coin gain to update
+        if len(rows) > 1:
+            # Unexpected condition, log and continue
+            log.warn(f"Coin Gain {coin_gain_tid} recorded multiple times??")
+
+        coin_gain = CoinGain(*row[0])
+
+        if (user_tid := self.get_user_tid(coin_gain.user_id)) is None:
+            log.debug(f"No corresponding user {coin_gain.user_id} to update coin gain for")
+            return False
+        if (balance := self.get_balance(user_tid)) is None:
+            log.warn(f"User {coin_gain.user_id} registered but no balance?")
+            return False
+
+        new_balance = balance + new_coins - coin_gain.coins
+        c.execute('''UPDATE coin_gains
+                     SET coins=?
+                     WHERE id=?''', [new_coins, coin_gain_tid])
+        c.execute('''UPDATE users
+                     SET coins=?
+                     WHERE id=?''', [new_balance, user_tid])
         self.conn.commit()
         c.close()
 
